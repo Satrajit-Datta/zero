@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>URIS — Urban Reservation Intelligence System</title>
+  <meta name="description" content="AI-powered urban public space reservation analytics: occupancy forecasting, no-show prediction, informal usage detection, and demand optimization."/>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .uris-popup .leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+    .uris-popup .leaflet-popup-tip{background:#fff}
+  </style>
+</head>
+<body>
+
+<!-- ── Loader ── -->
+<div class="loader-overlay" id="loader">
+  <div class="loader-logo">U<span>R</span>IS</div>
+  <div style="font-size:13px;color:#7b92b8;margin-bottom:20px">Urban Reservation Intelligence System</div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  <div class="loader-text">Initialising AI models &amp; synthetic datasets…</div>
+</div>
+
+<div class="app-layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🏙</div>
+      <div class="logo-text">U<span>R</span>IS</div>
+    </div>
+    <nav class="nav-section">
+      <div class="nav-label">Analytics</div>
+      <a class="nav-item active" data-section="section-kpi">
+        <span class="icon">📊</span> Dashboard
+      </a>
+      <a class="nav-item" data-section="section-map">
+        <span class="icon">🗺</span> Space Map
+      </a>
+      <a class="nav-item" data-section="section-forecast">
+        <span class="icon">📈</span> Forecasting
+      </a>
+      <a class="nav-item" data-section="section-noshow">
+        <span class="icon">🎯</span> No-Show Risk
+      </a>
+      <div class="nav-label" style="margin-top:12px">Intelligence</div>
+      <a class="nav-item" data-section="section-heatmap">
+        <span class="icon">🔥</span> Demand Heatmap
+      </a>
+      <a class="nav-item" data-section="section-anomaly">
+        <span class="icon">⚠️</span> Anomaly Detection
+      </a>
+      <a class="nav-item" data-section="section-optimize">
+        <span class="icon">⚖️</span> Optimization
+      </a>
+      <a class="nav-item" data-section="section-temporal">
+        <span class="icon">🕐</span> Temporal Patterns
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="pulse-dot"></div>
+      <div>Live · Refreshes: <strong id="refresh-count">0</strong></div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <div class="main-content">
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div>
+          <div class="page-title">Urban <span>Reservation</span> Intelligence</div>
+          <div class="breadcrumb">AI-powered space utilization analytics</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="live-badge"><div class="pulse-dot"></div> LIVE</div>
+        <div class="clock" id="live-clock">--:--:--</div>
+        <button class="refresh-btn" id="refresh-btn">
+          <span class="icon">↻</span> Refresh
+        </button>
+      </div>
+    </header>
+
+    <div class="page-body">
+
+      <!-- ── KPI Cards ── -->
+      <section id="section-kpi">
+        <div class="kpi-grid">
+          <div class="kpi-card accent">
+            <div class="kpi-header">
+              <div class="kpi-label">Total Reservations</div>
+              <div class="kpi-icon">📋</div>
+            </div>
+            <div class="kpi-value" id="kpi-total">—</div>
+            <div class="kpi-trend">Last 90 days · <span class="up">↑ 8.3%</span> vs prior period</div>
+          </div>
+          <div class="kpi-card success">
+            <div class="kpi-header">
+              <div class="kpi-label">Avg Utilization</div>
+              <div class="kpi-icon">📉</div>
+            </div>
+            <div class="kpi-value" id="kpi-util">—</div>
+            <div class="kpi-trend">Across all 20 spaces · <span class="up">↑ 2.1%</span></div>
+          </div>
+          <div class="kpi-card warning">
+            <div class="kpi-header">
+              <div class="kpi-label">No-Show Rate</div>
+              <div class="kpi-icon">🚫</div>
+            </div>
+            <div class="kpi-value" id="kpi-noshow">—</div>
+            <div class="kpi-trend">Predicted by GBM model · <span class="down">↑ 1.2%</span></div>
+          </div>
+          <div class="kpi-card danger">
+            <div class="kpi-header">
+              <div class="kpi-label">Overcrowding Alerts</div>
+              <div class="kpi-icon">🚨</div>
+            </div>
+            <div class="kpi-value" id="kpi-alerts">—</div>
+            <div class="kpi-trend">Active this session · <span class="down">↑ 2</span> since last refresh</div>
+          </div>
+        </div>
+
+        <!-- Secondary KPIs -->
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+          <div class="kpi-card accent" style="padding:14px 18px">
+            <div class="kpi-label" style="margin-bottom:6px">Informal Usage</div>
+            <div class="kpi-value" style="font-size:22px" id="kpi-informal">—</div>
+          </div>
+          <div class="kpi-card success" style="padding:14px 18px">
+            <div class="kpi-label" style="margin-bottom:6px">Underutilized</div>
+            <div class="kpi-value" style="font-size:22px" id="kpi-underutil">—</div>
+          </div>
+          <div class="kpi-card warning" style="padding:14px 18px">
+            <div class="kpi-label" style="margin-bottom:6px">Cancellation Rate</div>
+            <div class="kpi-value" style="font-size:22px" id="kpi-cancel">—</div>
+          </div>
+          <div class="kpi-card danger" style="padding:14px 18px">
+            <div class="kpi-label" style="margin-bottom:6px">Overcrowded</div>
+            <div class="kpi-value" style="font-size:22px" id="kpi-overcrowded">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Map + Utilization ── -->
+      <section id="section-map">
+        <div class="grid-3-2">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🗺 Space Map <span class="ptag live">LIVE</span></div>
+              <div style="font-size:12px;color:#7b92b8">Click a marker to load its forecast</div>
+            </div>
+            <div class="panel-body" style="padding:12px">
+              <div id="space-map"></div>
+              <div class="type-legend" style="margin-top:12px">
+                <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Overcrowded</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>Normal</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#4f8ef7"></div>Underutilized</div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">📊 Space Utilization <span class="ptag ml">ML</span></div>
+            </div>
+            <div class="panel-body">
+              <div class="chart-wrap" style="height:380px">
+                <canvas id="util-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Forecast + Heatmap ── -->
+      <div class="grid-2">
+        <section id="section-forecast" class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📈 <span id="forecast-title">Occupancy Forecast</span> <span class="ptag ml">ML</span></div>
+            <select class="select-sm" id="forecast-space-sel">
+              <option value="">Select space…</option>
+            </select>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap" style="height:240px">
+              <canvas id="forecast-chart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-heatmap" class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🔥 Demand Heatmap <span class="ptag live">LIVE</span></div>
+            <div style="font-size:12px;color:#7b92b8">Day × Hour intensity</div>
+          </div>
+          <div class="panel-body" style="padding:12px 16px">
+            <canvas id="heatmap-canvas" style="width:100%;height:200px"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── No-Show Risk Table ── -->
+      <section id="section-noshow" class="panel grid-full">
+        <div class="panel-header">
+          <div class="panel-title">🎯 No-Show Risk Table <span class="ptag ml">GBM Model</span></div>
+          <div style="font-size:12px;color:#7b92b8">Top 20 high-risk confirmed bookings</div>
+        </div>
+        <div class="panel-body" style="padding:0">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Booking ID</th><th>Space Type</th><th>User</th>
+                  <th>Time</th><th>Day</th><th>Risk Score</th>
+                  <th>Level</th><th>Top Factor</th>
+                </tr>
+              </thead>
+              <tbody id="noshow-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Anomalies + Optimization ── -->
+      <div class="grid-2">
+        <section id="section-anomaly" class="panel">
+          <div class="panel-header">
+            <div class="panel-title">⚠️ Informal Usage Anomalies <span class="ptag ai">Isolation Forest</span></div>
+          </div>
+          <div class="panel-body" style="padding:12px 16px">
+            <div class="anomaly-list" id="anomaly-list"></div>
+          </div>
+        </section>
+
+        <section id="section-optimize" class="panel">
+          <div class="panel-header">
+            <div class="panel-title">⚖️ Optimization Recommendations <span class="ptag ai">AI</span></div>
+          </div>
+          <div class="panel-body" style="padding:12px 16px">
+            <div class="rec-list" id="rec-list"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Temporal Patterns ── -->
+      <section id="section-temporal" class="panel grid-full">
+        <div class="panel-header">
+          <div class="panel-title">🕐 Temporal Pattern Explorer <span class="ptag ai">KMeans + Decomposition</span></div>
+          <div class="temporal-tabs">
+            <button class="tab-btn active" data-tab="clusters">Clusters</button>
+            <button class="tab-btn" data-tab="wdwe">Weekday vs Weekend</button>
+            <button class="tab-btn" data-tab="importance">Feature Importance</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="temporal-panels">
+
+            <!-- Tab: Clusters -->
+            <div id="tab-clusters" class="active" style="grid-template-columns:1fr 1fr;gap:20px">
+              <div class="chart-wrap" style="height:280px">
+                <canvas id="temporal-radar"></canvas>
+              </div>
+              <div id="pattern-cards" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start"></div>
+            </div>
+
+            <!-- Tab: Weekday vs Weekend -->
+            <div id="tab-wdwe" style="grid-template-columns:1fr 1fr;gap:20px">
+              <div class="panel" style="background:var(--bg-card2);border:1px solid var(--border)">
+                <div class="panel-header"><div class="panel-title">📅 Weekday</div></div>
+                <div class="panel-body" style="text-align:center">
+                  <div style="font-size:48px;font-weight:800;color:#4f8ef7;margin:16px 0" id="wd-avg">—</div>
+                  <div style="color:#7b92b8;font-size:13px">Average Occupancy</div>
+                  <div style="font-size:18px;font-weight:700;color:#22d3ee;margin-top:16px" id="wd-peak">—</div>
+                  <div style="color:#7b92b8;font-size:12px">Peak Hour</div>
+                </div>
+              </div>
+              <div class="panel" style="background:var(--bg-card2);border:1px solid var(--border)">
+                <div class="panel-header"><div class="panel-title">🎉 Weekend</div></div>
+                <div class="panel-body" style="text-align:center">
+                  <div style="font-size:48px;font-weight:800;color:#a78bfa;margin:16px 0" id="we-avg">—</div>
+                  <div style="color:#7b92b8;font-size:13px">Average Occupancy</div>
+                  <div style="font-size:18px;font-weight:700;color:#22d3ee;margin-top:16px" id="we-peak">—</div>
+                  <div style="color:#7b92b8;font-size:12px">Peak Hour</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab: Feature Importance -->
+            <div id="tab-importance" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+              <div>
+                <div style="font-size:13px;color:#7b92b8;margin-bottom:12px">
+                  Feature importance scores from the Gradient Boosting no-show prediction model.
+                  Higher values indicate stronger influence on prediction outcome.
+                </div>
+                <div class="chart-wrap" style="height:240px">
+                  <canvas id="importance-chart"></canvas>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;justify-content:center">
+                <div class="pattern-card">
+                  <div class="pattern-label">Top Predictor</div>
+                  <div class="pattern-name">Cancellation History</div>
+                  <div style="font-size:12px;color:#7b92b8;margin-top:6px">
+                    Users with 3+ prior cancellations are 2.4× more likely to no-show.
+                  </div>
+                </div>
+                <div class="pattern-card">
+                  <div class="pattern-label">Second Predictor</div>
+                  <div class="pattern-name">Booking Lead Time</div>
+                  <div style="font-size:12px;color:#7b92b8;margin-top:6px">
+                    Each additional day of lead time adds ~1.8% no-show probability.
+                  </div>
+                </div>
+                <div class="pattern-card">
+                  <div class="pattern-label">Third Predictor</div>
+                  <div class="pattern-name">Space Type</div>
+                  <div style="font-size:12px;color:#7b92b8;margin-top:6px">
+                    Parking spaces show 22% baseline no-show vs 10% for shared infrastructure.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- temporal-panels -->
+        </div>
+      </section>
+
+      <div style="height:40px"></div>
+    </div><!-- page-body -->
+  </div><!-- main-content -->
+</div><!-- app-layout -->
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Scripts -->
+<script src="js/simulator.js"></script>
+<script src="js/ml_models.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/map.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
